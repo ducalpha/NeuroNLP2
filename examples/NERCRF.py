@@ -238,6 +238,10 @@ def main():
                 writer.close()
                 test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
 
+                # save the model for analyzing later
+                torch.save(network.state_dict(), 'ner_crf_network.pt')
+
+
             print("best dev  acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (dev_acc, dev_precision, dev_recall, dev_f1, best_epoch))
             print("best test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
 
