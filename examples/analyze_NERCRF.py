@@ -43,29 +43,18 @@ def evaluate(output_file):
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
     parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
-    parser.add_argument('--cuda', action='store_true', help='using GPU')
-    parser.add_argument('--embedding', choices=['glove', 'senna', 'sskip', 'polyglot'], help='Embedding for words', required=True)
-    parser.add_argument('--embedding_dict', help='path for embedding dict')
     parser.add_argument('--model_dir', help='dir path for saving model file.', required=True)
     parser.add_argument('--model_name', help='file name for saving model file.', required=True)
-    parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
 
     args = parser.parse_args()
 
     logger = get_logger("NERCRF")
 
-    mode = args.mode
-    test_path = args.test
-    embedding = args.embedding
-    embedding_path = args.embedding_dict
-
-    embedd_dict, embedd_dim = utils.load_embedding_dict(embedding, embedding_path)
-
     logger.info("Creating Alphabets")
     word_alphabet, char_alphabet, pos_alphabet, \
-    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", train_path, data_paths=[dev_path, test_path],
-                                                                 embedd_dict=embedd_dict, max_vocabulary_size=50000)
+    chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", test_path, data_paths=[test_path, test_path],
+                                                                 embedd_dict=None, max_vocabulary_size=50000)
 
     logger.info("Word Alphabet Size: %d" % word_alphabet.size())
     logger.info("Character Alphabet Size: %d" % char_alphabet.size())
@@ -74,53 +63,24 @@ def main():
     logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
 
     logger.info("Reading Data")
-    device = torch.device('cuda') if args.cuda else torch.device('cpu')
+    device = torch.device('cuda') if args.gpu else torch.device('cpu')
 
-    data_train = conll03_data.read_data_to_tensor(train_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=device)
-    num_data = sum(data_train[1])
     num_labels = ner_alphabet.size()
 
     data_test = conll03_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=device)
 
     writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 
-    def construct_word_embedding_table():
-        scale = np.sqrt(3.0 / embedd_dim)
-        table = np.empty([word_alphabet.size(), embedd_dim], dtype=np.float32)
-        table[conll03_data.UNK_ID, :] = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
-        oov = 0
-        for word, index in word_alphabet.items():
-            if word in embedd_dict:
-                embedding = embedd_dict[word]
-            elif word.lower() in embedd_dict:
-                embedding = embedd_dict[word.lower()]
-            else:
-                embedding = np.random.uniform(-scale, scale, [1, embedd_dim]).astype(np.float32)
-                oov += 1
-            table[index, :] = embedding
-        print('oov: %d' % oov)
-        return torch.from_numpy(table)
-
-    word_table = construct_word_embedding_table()
     logger.info("constructing network...")
 
-    char_dim = args.char_dim
-    window = 3
-    num_layers = args.num_layers
-    tag_space = args.tag_space
-    initializer = nn.init.xavier_uniform_
-    if args.dropout == 'std':
-        network = BiRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                     tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, initializer=initializer)
-    else:
-        network = BiVarRecurrentConvCRF(embedd_dim, word_alphabet.size(), char_dim, char_alphabet.size(), num_filters, window, mode, hidden_size, num_layers, num_labels,
-                                        tag_space=tag_space, embedd_word=word_table, p_in=p_in, p_out=p_out, p_rnn=p_rnn, bigram=bigram, initializer=initializer)
-
-    network = network.to(device)
-
-    model_path = os.join(model_dir, model_file)
+    model_dir = args.model_dir
+    model_name = args.model_name
+    model_path = os.path.join(model_dir, model_name)
     network.load_state_dict(torch.load(model_path))
+    network = torch.load(model_path)
 
+    # How to set the dropout prob to 1?
+    batch_size = args.batch_size
     with torch.no_grad():
         tmp_filename = 'tmp/%s_analyze' % (str(uid))
         writer.start(tmp_filename)
@@ -132,7 +92,7 @@ def main():
         writer.close()
         test_acc, test_precision, test_recall, test_f1 = evaluate(tmp_filename)
 
-        print("Test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%% (epoch: %d)" % (test_acc, test_precision, test_recall, test_f1, best_epoch))
+        print("Test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%" % (test_acc, test_precision, test_recall, test_f1))
 
 
 if __name__ == '__main__':
