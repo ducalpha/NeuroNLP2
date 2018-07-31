@@ -9,3 +9,4 @@ CUDA_VISIBLE_DEVICES=0 python examples/NERCRF.py --cuda --mode LSTM --num_epochs
 # --train "data/conll2003/english/eng.train.bio.conll" --dev "data/conll2003/english/eng.dev.bio.conll" --test "data/conll2003/english/eng.test.bio.conll"
 # --learning_rate 0.01 --decay_rate 0.05 --schedule 1 --gamma 0.0 \
 #--train "data/conll2003/english/eng.train.bioes.conll" --dev "data/conll2003/english/eng.dev.bioes.conll" --test "data/conll2003/english/eng.test.bioes.conll"
+ #--embedding glove --embedding_dict "data/glove/glove.6B/glove.6B.300d.gz" \
