@@ -1,12 +1,9 @@
 from __future__ import print_function
 
 __author__ = 'duc'
-"""
-Predict NER for sentences using LSTM-CNNs-CRF.
-"""
+""" Predict NER for sentences using LSTM-CNNs-CRF. """
 
 import sys
-import os
 
 sys.path.append(".")
 sys.path.append("..")
@@ -15,9 +12,10 @@ import argparse
 import uuid
 import torch
 from neuronlp2.io import get_logger, conll03_data, CoNLL03Writer
-import NERCRF
 
 uid = uuid.uuid4().hex[:6]
+logger = get_logger("NERCRF")
+
 
 def _create_alphabets():
   # Set everything to None because the alphabets are supposed to be loaded from training phase.
@@ -32,19 +30,7 @@ def _create_alphabets():
   return word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet
 
 
-def predict_ner(batch_size, model_path, test_file_path):
-  logger = get_logger("NERCRF")
-
-  logger.info("Creating Alphabets")
-  word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet = _create_alphabets()
-
-  logger.info("Reading Data")
-  data_test = conll03_data.read_data_to_tensor(test_file_path, word_alphabet, char_alphabet, 
-      pos_alphabet, chunk_alphabet, ner_alphabet, device=torch.device('cuda'))
-
-  logger.info("Constructing Network...")
-  network = torch.load(model_path)
-
+def predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size):
   # Todo: no label
   writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
   with torch.no_grad():
@@ -56,8 +42,23 @@ def predict_ner(batch_size, model_path, test_file_path):
       word, char, pos, chunk, labels, masks, lengths = batch
       # TODO: no target.
       preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
-      writer.write(word.cpu().numpy(), pos.cpu().numpy(), chunk.cpu().numpy(), preds.cpu().numpy(), labels.cpu().numpy(), lengths.cpu().numpy())
+      writer.write(word.cpu().numpy(), pos.cpu().numpy(), chunk.cpu().numpy(), preds.cpu().numpy(),
+                   labels.cpu().numpy(), lengths.cpu().numpy())
     writer.close()
+
+
+def predict_ner(batch_size, model_path, test_file_path):
+  logger.info("Creating Alphabets")
+  word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet = _create_alphabets()
+
+  logger.info("Reading Data")
+  data_test = conll03_data.read_data_to_tensor(test_file_path, word_alphabet, char_alphabet,
+                                               pos_alphabet, chunk_alphabet, ner_alphabet, device=torch.device('cuda'))
+
+  logger.info("Constructing Network...")
+  network = torch.load(model_path)
+  predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size)
+
 
 def main():
   parser = argparse.ArgumentParser(description='Make prediction with a trained model of bi-directional RNN-CNN-CRF')
@@ -71,6 +72,7 @@ def main():
   test_file_path = args.test
 
   predict_ner(batch_size, model_path, test_file_path)
+
 
 if __name__ == '__main__':
   main()
