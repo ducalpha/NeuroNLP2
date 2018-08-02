@@ -19,19 +19,11 @@ import NERCRF
 
 uid = uuid.uuid4().hex[:6]
 
-
-def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
-    parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
-    parser.add_argument('--model_dir', help='dir path for saving model file.', required=True)
-    parser.add_argument('--model_name', help='file name for saving model file.', required=True)
-    parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
-
-    args = parser.parse_args()
+def perform_ner(batch_size, model_dir, model_name, file_path):
     logger = get_logger("NERCRF")
 
     logger.info("Creating Alphabets")
-    test_path = args.test
+    test_path = file_path
     # Set everything to None because the alphabets are supposed to be loaded from training phase.
     word_alphabet, char_alphabet, pos_alphabet, \
     chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", None)
@@ -47,7 +39,7 @@ def main():
     data_test = conll03_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=torch.device('cuda'))
 
     logger.info("Constructing Network...")
-    network = torch.load(os.path.join(args.model_dir, args.model_name))
+    network = torch.load(os.path.join(model_dir, model_name))
 
     writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
     with torch.no_grad():
@@ -55,7 +47,7 @@ def main():
         tmp_filename = 'tmp/%s_analyze' % (str(uid))
         writer.start(tmp_filename)
 
-        for batch in conll03_data.iterate_batch_tensor(data_test, args.batch_size):
+        for batch in conll03_data.iterate_batch_tensor(data_test, batch_size):
             word, char, pos, chunk, labels, masks, lengths = batch
             preds, _ = network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
             writer.write(word.cpu().numpy(), pos.cpu().numpy(), chunk.cpu().numpy(), preds.cpu().numpy(), labels.cpu().numpy(), lengths.cpu().numpy())
@@ -64,6 +56,14 @@ def main():
 
         print("Test acc: %.2f%%, precision: %.2f%%, recall: %.2f%%, F1: %.2f%%" % (test_acc, test_precision, test_recall, test_f1))
 
+def main():
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
+    parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
+    parser.add_argument('--model_dir', help='dir path for saving model file.', required=True)
+    parser.add_argument('--model_name', help='file name for saving model file.', required=True)
+    parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+    args = parser.parse_args()
+    perform_ner(args.batch_size, args.model_dir, args.model_name, args.test)
 
 if __name__ == '__main__':
     main()
