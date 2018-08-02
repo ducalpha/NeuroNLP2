@@ -19,11 +19,7 @@ import NERCRF
 
 uid = uuid.uuid4().hex[:6]
 
-def perform_ner(batch_size, model_dir, model_name, file_path):
-  logger = get_logger("NERCRF")
-
-  logger.info("Creating Alphabets")
-  test_path = file_path
+def _create_alphabets():
   # Set everything to None because the alphabets are supposed to be loaded from training phase.
   word_alphabet, char_alphabet, pos_alphabet, \
   chunk_alphabet, ner_alphabet = conll03_data.create_alphabets("data/alphabets/ner_crf/", None)
@@ -33,13 +29,21 @@ def perform_ner(batch_size, model_dir, model_name, file_path):
   logger.info("POS Alphabet Size: %d" % pos_alphabet.size())
   logger.info("Chunk Alphabet Size: %d" % chunk_alphabet.size())
   logger.info("NER Alphabet Size: %d" % ner_alphabet.size())
+  return word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet
+
+
+def predict_ner(batch_size, model_path, test_file_path):
+  logger = get_logger("NERCRF")
+
+  logger.info("Creating Alphabets")
+  word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet = _create_alphabets()
 
   logger.info("Reading Data")
-  # TODO: hard code 'cuda' for now.
-  data_test = conll03_data.read_data_to_tensor(test_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, device=torch.device('cuda'))
+  data_test = conll03_data.read_data_to_tensor(test_file_path, word_alphabet, char_alphabet, 
+      pos_alphabet, chunk_alphabet, ner_alphabet, device=torch.device('cuda'))
 
   logger.info("Constructing Network...")
-  network = torch.load(os.path.join(model_dir, model_name))
+  network = torch.load(model_path)
 
   # Todo: no label
   writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
@@ -56,13 +60,17 @@ def perform_ner(batch_size, model_dir, model_name, file_path):
     writer.close()
 
 def main():
-  parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN-CNN-CRF')
+  parser = argparse.ArgumentParser(description='Make prediction with a trained model of bi-directional RNN-CNN-CRF')
   parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
-  parser.add_argument('--model_dir', help='dir path for saving model file.', required=True)
-  parser.add_argument('--model_name', help='file name for saving model file.', required=True)
-  parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+  parser.add_argument('--model', help='Trained model', required=True)
+  parser.add_argument('--test', help='Test sentences file path')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+
   args = parser.parse_args()
-  perform_ner(args.batch_size, args.model_dir, args.model_name, args.test)
+  batch_size = args.batch_size
+  model_path = args.model
+  test_file_path = args.test
+
+  predict_ner(batch_size, model_path, test_file_path)
 
 if __name__ == '__main__':
   main()
