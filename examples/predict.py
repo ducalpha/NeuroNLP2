@@ -30,13 +30,12 @@ def _create_alphabets():
   return word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet
 
 
-def predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size):
+def predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size, output_file_path):
   # Todo: no label
   writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
   with torch.no_grad():
     network.eval()  # This set dropout to an identity function.
-    tmp_filename = 'tmp/%s_analyze' % (str(uid))
-    writer.start(tmp_filename)
+    writer.start(output_file_path)
 
     for batch in conll03_data.iterate_batch_tensor(data_test, batch_size):
       word, char, pos, chunk, labels, masks, lengths = batch
@@ -57,14 +56,15 @@ def predict_ner(batch_size, model_path, test_file_path):
 
   logger.info("Constructing Network...")
   network = torch.load(model_path)
-  predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size)
+  preds_file_path = test_file_path + '.preds'
+  predict(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, network, data_test, batch_size, preds_file_path)
 
 
 def main():
   parser = argparse.ArgumentParser(description='Make prediction with a trained model of bi-directional RNN-CNN-CRF')
   parser.add_argument('--batch_size', type=int, default=16, help='Number of sentences in each batch')
   parser.add_argument('--model', help='Trained model', required=True)
-  parser.add_argument('--test', help='Test sentences file path')  # "data/POS-penn/wsj/split1/wsj1.test.original"
+  parser.add_argument('--test', help='Test sentences file path', required=True)  # "data/POS-penn/wsj/split1/wsj1.test.original"
 
   args = parser.parse_args()
   batch_size = args.batch_size

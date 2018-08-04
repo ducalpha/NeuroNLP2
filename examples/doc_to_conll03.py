@@ -17,7 +17,9 @@ def _doc_to_conll03(doc):
   num_sents = 0
   for sent in doc.sents:
     for token in sent:
-      line = '{} O O O'.format(token.text)
+      if token.is_space:
+         continue
+      line = '{} {} O O'.format(token.text, token.tag_)
       output.append(line)
     output.append('\n')
     num_sents += 1
@@ -56,4 +58,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-  # todo: call convert conll03 to neuronlp2
